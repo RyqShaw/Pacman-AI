@@ -29,4 +29,4 @@ class Network(nn.Module):
         )
         
     def forward(self, x):
-        return self.stack(x / 255)
+        return self.stack(x)
