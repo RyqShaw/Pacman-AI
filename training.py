@@ -160,9 +160,9 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
             }
             torch.save(checkpoint, "checkpoint.path")
     
-    torch.save(target_nn.state_dict(), "nn.path")
+    torch.save(policy_nn.state_dict(), "nn.path")
 
 start_time = time.time()
-train(load_checkpoint=False)
+train(load_checkpoint=True)
 end_time = time.time()
 print(f"Total Time in Training: {end_time-start_time}")
