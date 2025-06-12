@@ -140,4 +140,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
     
     torch.save(target_nn.state_dict(), "nn.path")
 
-train(max_episodes=1000, load_checkpoint=True)
+start_time = time.time()
+train(load_checkpoint=False)
+end_time = time.time()
+print(f"Total Time in Training: {end_time-start_time}")
