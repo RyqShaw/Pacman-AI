@@ -8,6 +8,12 @@ from replay_buffer import ReplayBuffer
 import os
 import time
 
+'''
+- Bottle neck at CPU
+- Seperate Experience from Training better
+- Limit Episode Length so they arent infinite
+'''
+
 #Setup
 gym.register_envs(ale_py)
 env = gym.make('ALE/MsPacman-v5',  obs_type="grayscale")
@@ -34,11 +40,11 @@ print(f"Running on Device: {device}")
 #   - gamma: Multiplier for future rewards
 #   - epsilon: Epsilon Greedy Strategy value to determine random actions
 #   - decay_rate: amount epsilon is decayed by every iteration
-def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=0.999, min_epsilon=0.1, load_checkpoint=False):
+def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=0.999, min_epsilon=0.1, max_episode_steps=300, load_checkpoint=False):
     # Deep Q Learning Setup
     policy_nn = Network(env.action_space.n).to(device)
     target_nn = Network(env.action_space.n).to(device)
-    min_replay_size = 10000
+    min_replay_size = 5000
     buffer = ReplayBuffer(100000)
     optimizer = optim.Adam(policy_nn.parameters(), lr=0.0001)
     mse_loss_nn = torch.nn.MSELoss()
@@ -55,6 +61,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
         epsilon = checkpoint['epsilon']
     
     for episode in range(episodes_done, max_episodes):
+        episode_steps = 0
         if episode % 100 == 0:
             print(f"Episode: {episode} / {max_episodes}")
         
@@ -82,6 +89,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
 
             new_obs, reward, terminated, truncated, info = env.step(action)
             total_steps += 1
+            episode_steps += 1
             # Scales reward
             clipped_reward = np.clip(reward, -1, 1)
             
@@ -123,6 +131,10 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
             
             # update observation for next round
             obs = new_obs
+            
+            # Episode Limit
+            if episode_steps >= max_episode_steps:
+                done = True
 
         epsilon = max(min_epsilon, epsilon * decay_rate)
         
