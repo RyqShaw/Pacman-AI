@@ -15,7 +15,7 @@ env = gym.make('ALE/MsPacman-v5',  obs_type="grayscale")
 env = gym.wrappers.ResizeObservation(env, (84, 84))
 
 # 4 Frames as input
-env = gym.wrappers.FrameStack(env, 4)
+env = gym.wrappers.FrameStackObservation(env, 4)
 obs, info = env.reset()
 
 device = (
@@ -55,7 +55,7 @@ def train(batch_size=64, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=
         epsilon = checkpoint['epsilon']
     
     for episode in range(episodes_done, max_episodes):
-        obs, reward, terminated, truncated, info = env.reset()
+        obs, info = env.reset()
         
         done = False
         while not done:
@@ -134,7 +134,7 @@ def train(batch_size=64, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=
                 'optimizer_state_dict': optimizer.state_dict(),
                 'epsilon': epsilon,
             }
-        torch.save(checkpoint, "checkpoint.pth")
+            torch.save(checkpoint, "checkpoint.pth")
     
     torch.save(target_nn.state_dict(), "nn.path")
 
