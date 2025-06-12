@@ -34,20 +34,20 @@ print(f"Running on Device: {device}")
 #   - gamma: Multiplier for future rewards
 #   - epsilon: Epsilon Greedy Strategy value to determine random actions
 #   - decay_rate: amount epsilon is decayed by every iteration
-def train(batch_size=64, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=0.999, min_epsilon=0.1, load_checkpoint=False):
+def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=0.999, min_epsilon=0.1, load_checkpoint=False):
     # Deep Q Learning Setup
     policy_nn = Network(env.action_space.n).to(device)
     target_nn = Network(env.action_space.n).to(device)
     min_replay_size = 10000
-    buffer = ReplayBuffer(min_replay_size)
+    buffer = ReplayBuffer(100000)
     optimizer = optim.Adam(policy_nn.parameters(), lr=0.0001)
     mse_loss_nn = torch.nn.MSELoss()
     episodes_done = 0
     total_steps = 0
     #Load Checkpoint if needed
-    if os.path.exists("checkpoint.pth") and load_checkpoint:
+    if os.path.exists("checkpoint.path") and load_checkpoint:
         print("Loading Checkpoint")
-        checkpoint = torch.load("checkpoint.pth")
+        checkpoint = torch.load("checkpoint.path")
         episodes_done = checkpoint['episode']
         policy_nn.load_state_dict(checkpoint['policy_state_dict'])
         target_nn.load_state_dict(checkpoint['target_state_dict'])
@@ -55,6 +55,9 @@ def train(batch_size=64, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=
         epsilon = checkpoint['epsilon']
     
     for episode in range(episodes_done, max_episodes):
+        if episode % 100 == 0:
+            print(f"Episode: {episode} / {max_episodes}")
+        
         obs, info = env.reset()
         
         done = False
@@ -73,7 +76,7 @@ def train(batch_size=64, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=
                 # sends it to nn
                 # Gets best possible action
                 with torch.no_grad():
-                    state = torch.FloatTensor(normalized_obs).unsqueeze(1).to(device)
+                    state = torch.FloatTensor(normalized_obs).unsqueeze(0).to(device)
                     q_vals = policy_nn.forward(state)
                     action = torch.argmax(q_vals).item()
 
@@ -83,8 +86,10 @@ def train(batch_size=64, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=
             clipped_reward = np.clip(reward, -1, 1)
             
             # add to buffer
-            new_obs = torch.tensor(new_obs, dtype=torch.float32).to(device)
-            buffer.add(normalized_obs, action, clipped_reward, new_obs, done)
+            new_obs_array = np.array(new_obs)
+            normalized_new_obs = new_obs_array.astype(np.float32) / 255.0
+            done = terminated or truncated  # Calculate done first
+            buffer.add(normalized_obs, action, clipped_reward, normalized_new_obs, done)
             
             # Do Deep Q Learning at Batch Size
             if len(buffer) >= min_replay_size:
@@ -92,21 +97,19 @@ def train(batch_size=64, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=
                 
                 # Process all values
                 states = torch.FloatTensor(states).to(device)
-                actions = torch.FloatTensor(actions).unsqueeze(1).to(device)
-                next_states = torch.FloatTensor(next_states).unsqueeze(1).to(device)
+                actions = torch.LongTensor(actions).to(device)
+                next_states = torch.FloatTensor(next_states).to(device)
                 rewards = torch.FloatTensor(rewards).to(device)
                 dones = torch.BoolTensor(dones).to(device)
                 
-                q_vals = policy_nn.forward(states).gather(1, actions)
+                q_vals = policy_nn.forward(states).gather(1, actions.unsqueeze(1))
                 
                 with torch.no_grad():
                     # Q Learning, Getting the max from the first state and making that the target_q
-                    new_q_values = target_nn(next_states).max(1, keepdim=True)[0]
-                    target_q = rewards + gamma * new_q_values
+                    next_q_values = target_nn(next_states).max(1)[0]
+                    target_q = rewards + gamma * next_q_values * ~dones 
                 
-                # MSE loss 
-                loss = mse_loss_nn(q_vals, target_q)
-                
+                loss = mse_loss_nn(q_vals.squeeze(), target_q)
                 optimizer.zero_grad()
                 loss.backward()
                 
@@ -117,16 +120,15 @@ def train(batch_size=64, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=
                 # Update target every 1000 steps AI takes
                 if total_steps % 1000 == 0:
                     target_nn.load_state_dict(policy_nn.state_dict())
-                    
-                # update observation for next round
-                obs = new_obs
             
-            done = terminated or truncated
+            # update observation for next round
+            obs = new_obs
 
         epsilon = max(min_epsilon, epsilon * decay_rate)
         
         # Update Target NN + checkpoint
-        if episode % 100 == 0 and episode != 0: 
+        if episode % 100 == 0 and episode != 0:
+            print("Checkpoint!")
             checkpoint = {
                 'episode': episode,
                 'policy_state_dict': policy_nn.state_dict(),
@@ -134,8 +136,8 @@ def train(batch_size=64, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=
                 'optimizer_state_dict': optimizer.state_dict(),
                 'epsilon': epsilon,
             }
-            torch.save(checkpoint, "checkpoint.pth")
+            torch.save(checkpoint, "checkpoint.path")
     
     torch.save(target_nn.state_dict(), "nn.path")
 
-train(max_episodes=1000)
+train(max_episodes=1000, load_checkpoint=True)

@@ -1,4 +1,5 @@
 import torch
+import random
 import numpy as np
 from collections import deque
 
@@ -13,14 +14,15 @@ class ReplayBuffer:
 
     # get random sars
     def sample(self, batch_size):
-        random_sample = np.random.sample(self.buffer, batch_size)
-        states, actions, rewards, next_states, done = zip(*random_sample)
+        transitions = random.sample(self.buffer, batch_size)
+        states, actions, rewards, next_states, dones = zip(*transitions)
+
         return (
-            torch.stack(states),
-            torch.tensor(actions, dtype=torch.int64),
-            torch.tensor(rewards, dtype=torch.float),
-            torch.stack(next_states),
-            torch.stack(done)
+            np.array(states),
+            np.array(actions),
+            np.array(rewards, dtype=np.float32),
+            np.array(next_states),
+            np.array(dones, dtype=bool)
         )
 
     def __len__(self):
