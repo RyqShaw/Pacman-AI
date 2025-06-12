@@ -11,16 +11,6 @@ if visual_render:
     rendering = "human"
 else:
     rendering = "rgb_array"
-    
-device = (
-    "cuda"
-    if torch.cuda.is_available()
-    else "mps"
-    if torch.backends.mps.is_available()
-    else "cpu"
-)
-
-print(device)
 
 # Gymnasium Env
 gym.register_envs(ale_py)
@@ -33,7 +23,7 @@ env = gym.wrappers.FrameStackObservation(env, 4)
 obs, info = env.reset()
 
 #Setup network
-cnn = Network(env.action_space.n).to(device)
+cnn = Network(env.action_space.n)
 cnn.load_state_dict(torch.load("nn.path"))
 cnn.eval()
 
@@ -42,7 +32,7 @@ done = False
 while not done:
     action = 0
     with torch.no_grad():
-        state_tensor = torch.FloatTensor(obs).unsqueeze(0).to(device)
+        state_tensor = torch.FloatTensor(obs).unsqueeze(0)
         q_values = cnn.forward(state_tensor)
         action = torch.argmax(q_values).item()
     obs, reward, terminated, truncated, info = env.step(action)

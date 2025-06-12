@@ -8,12 +8,6 @@ from replay_buffer import ReplayBuffer
 import os
 import time
 
-'''
-- Bottle neck at CPU
-- Seperate Experience from Training better
-- Limit Episode Length so they arent infinite
-'''
-
 #Setup
 gym.register_envs(ale_py)
 env = gym.make('ALE/MsPacman-v5',  obs_type="grayscale")
@@ -45,7 +39,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
     policy_nn = Network(env.action_space.n).to(device)
     target_nn = Network(env.action_space.n).to(device)
     min_replay_size = 5000
-    buffer = ReplayBuffer(100000)
+    buffer = ReplayBuffer(50000)
     optimizer = optim.Adam(policy_nn.parameters(), lr=0.0001)
     mse_loss_nn = torch.nn.MSELoss()
     episodes_done = 0
@@ -62,7 +56,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
     
     for episode in range(episodes_done, max_episodes):
         episode_steps = 0
-        if episode % 100 == 0:
+        if episode % 10 == 0:
             print(f"Episode: {episode} / {max_episodes}")
         
         obs, info = env.reset()
@@ -99,8 +93,8 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
             done = terminated or truncated  # Calculate done first
             buffer.add(normalized_obs, action, clipped_reward, normalized_new_obs, done)
             
-            # Do Deep Q Learning at Batch Size
-            if len(buffer) >= min_replay_size:
+            # Do Deep Q Learning at Batch Size, update every 4 steps
+            if len(buffer) >= min_replay_size and total_steps % 4 == 0:
                 states, actions, rewards, next_states, dones = buffer.sample(batch_size)
                 
                 # Process all values
@@ -153,6 +147,6 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
     torch.save(target_nn.state_dict(), "nn.path")
 
 start_time = time.time()
-train(max_episodes=100, batch_size=512, load_checkpoint=False)
+train(max_episodes=1000, load_checkpoint=False)
 end_time = time.time()
 print(f"Total Time in Training: {end_time-start_time}")
