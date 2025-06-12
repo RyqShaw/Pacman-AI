@@ -87,12 +87,21 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
             episode_steps += 1
             # Scales reward
             clipped_reward = np.clip(reward, -1, 1)
+            done = terminated or truncated
+            
+            #Standing Still Penalty + Death Penalty
+            if done:
+                clipped_reward = -1.0
+            else:
+                clipped_reward += -0.01
             
             # add to buffer
             new_obs_array = np.array(new_obs)
             normalized_new_obs = new_obs_array.astype(np.float32) / 255.0
-            done = terminated or truncated  # Calculate done first
+           
             buffer.add(normalized_obs, action, clipped_reward, normalized_new_obs, done)
+            
+            
             
             # Do Deep Q Learning at Batch Size, update every 4 steps
             if len(buffer) >= min_replay_size and total_steps % 4 == 0:
