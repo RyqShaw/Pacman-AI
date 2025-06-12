@@ -5,6 +5,8 @@ import gymnasium as gym
 import ale_py
 from network import Network
 from replay_buffer import ReplayBuffer
+import os
+import time
 
 #Setup
 gym.register_envs(ale_py)
@@ -29,15 +31,24 @@ print(f"Running on Device: {device}")
 #   - gamma: Multiplier for future rewards
 #   - epsilon: Epsilon Greedy Strategy value to determine random actions
 #   - decay_rate: amount epsilon is decayed by every iteration
-def train(batch_size, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=0.999, min_epsilon=0.1):
+def train(batch_size, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=0.999, min_epsilon=0.1, load_checkpoint=False):
     # Deep Q Learning Setup
     policy_nn = Network(env.action_space.n).to(device)
     target_nn = Network(env.action_space.n).to(device)
     buffer = ReplayBuffer(10000)
     optimizer = optim.Adam(policy_nn.parameters, lr=0.0001)
-    total_reward = 0
+    mse_loss_nn = torch.nn.MSELoss()
+    episodes_done = 0
+    #Load Checkpoint if needed
+    if os.path.exists("checkpoint.pth") and load_checkpoint:
+        print("Loading Checkpoint")
+        checkpoint = torch.load("checkpoint.pth")
+        episodes_done = checkpoint['episode']
+        policy_nn.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        epsilon = checkpoint['epsilon']
     
-    for episode in max_episodes:
+    for episode in (max_episodes - episodes_done):
         obs, reward, terminated, truncated, info = env.reset()
         
         done = False
@@ -67,7 +78,6 @@ def train(batch_size, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=0.9
             # add to buffer
             new_obs = torch.tensor(new_obs, dtype=torch.float32).flatten().to(device)
             buffer.add(obs, action, reward, new_obs, done)
-            total_reward += reward
             
             # Do Deep Q Learning at Batch Size
             if len(buffer) >= batch_size:
@@ -87,10 +97,28 @@ def train(batch_size, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=0.9
                     new_q_values = policy_nn(next_states).max(1, keepdim=True)[0]
                     target_q = rewards + gamma * new_q_values
                 
-                loss_val = 0 #mse implement
+                # MSE loss 
+                loss = mse_loss_nn(target_q)
+                
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
             
             done = terminated or truncated
 
         epsilon = max(min_epsilon, epsilon * decay_rate)
+        
+        # Update Target NN + checkpoint
+        if episode % 100 == 0 and episode != 0: 
+            target_nn.load_state_dict(policy_nn.state_dict())
+            checkpoint = {
+                'episode': episode,
+                'model_state_dict': target_nn.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'epsilon': epsilon,
+            }
+            torch.save(checkpoint, "checkpoint.pth")
+    
+    torch.save(target_nn.state_dict(), "nn.path")
 
 train()
