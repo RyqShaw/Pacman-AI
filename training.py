@@ -107,7 +107,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
                 dones = torch.BoolTensor(dones).to(device)
                 
                 # Memory saving for gpu training
-                with autocast():
+                with autocast(device):
                     q_vals = policy_nn.forward(states).gather(1, actions.unsqueeze(1))
                     
                     with torch.no_grad():
