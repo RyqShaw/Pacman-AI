@@ -34,7 +34,7 @@ def train(batch_size, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=0.9
     policy_nn = Network(env.action_space.n).to(device)
     target_nn = Network(env.action_space.n).to(device)
     buffer = ReplayBuffer(10000)
-    optimizer = optimizer = optim.Adam(policy_nn.parameters, lr=0.0001)
+    optimizer = optim.Adam(policy_nn.parameters, lr=0.0001)
     total_reward = 0
     
     for episode in max_episodes:
