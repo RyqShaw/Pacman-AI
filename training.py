@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import torch.optim as optim
+from torch.amp import autocast, GradScaler
 import gymnasium as gym
 import ale_py
 from network import Network
@@ -56,7 +57,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
     
     for episode in range(episodes_done, max_episodes):
         episode_steps = 0
-        if episode % 10 == 0:
+        if episode % 100 == 0:
             print(f"Episode: {episode} / {max_episodes}")
         
         obs, info = env.reset()
@@ -95,6 +96,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
             
             # Do Deep Q Learning at Batch Size, update every 4 steps
             if len(buffer) >= min_replay_size and total_steps % 4 == 0:
+                scaler = GradScaler()
                 states, actions, rewards, next_states, dones = buffer.sample(batch_size)
                 
                 # Process all values
@@ -104,20 +106,34 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
                 rewards = torch.FloatTensor(rewards).to(device)
                 dones = torch.BoolTensor(dones).to(device)
                 
-                q_vals = policy_nn.forward(states).gather(1, actions.unsqueeze(1))
+                # Memory saving for gpu training
+                with autocast():
+                    q_vals = policy_nn.forward(states).gather(1, actions.unsqueeze(1))
+                    
+                    with torch.no_grad():
+                        # Q Learning, Getting the max from the first state and making that the target_q
+                        next_q_values = target_nn(next_states).max(1)[0]
+                        target_q = rewards + gamma * next_q_values * ~dones 
+
+                    # Loss Calculations
+                    loss = mse_loss_nn(q_vals.squeeze(), target_q)
                 
-                with torch.no_grad():
-                    # Q Learning, Getting the max from the first state and making that the target_q
-                    next_q_values = target_nn(next_states).max(1)[0]
-                    target_q = rewards + gamma * next_q_values * ~dones 
-                
-                loss = mse_loss_nn(q_vals.squeeze(), target_q)
-                optimizer.zero_grad()
-                loss.backward()
+                # Optimizer to update gradients
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
                 
                 # Gradient clipping to prevent instability in training
                 torch.nn.utils.clip_grad_norm_(policy_nn.parameters(), max_norm=10.0)
-                optimizer.step()
+                
+                # Free some memory now
+                del states, next_states, q_vals, target_q, loss
+                
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
+                
+                # Free some memory now
+                torch.cuda.empty_cache()
                 
                 # Update target every 1000 steps AI takes
                 if total_steps % 1000 == 0:
@@ -147,6 +163,6 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
     torch.save(target_nn.state_dict(), "nn.path")
 
 start_time = time.time()
-train(max_episodes=1000, load_checkpoint=False)
+train(load_checkpoint=False)
 end_time = time.time()
 print(f"Total Time in Training: {end_time-start_time}")
