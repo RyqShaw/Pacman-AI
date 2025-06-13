@@ -35,7 +35,7 @@ print(f"Running on Device: {device}")
 #   - gamma: Multiplier for future rewards
 #   - epsilon: Epsilon Greedy Strategy value to determine random actions
 #   - decay_rate: amount epsilon is decayed by every iteration
-def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate=0.999, min_epsilon=0.1, max_episode_steps=300, load_checkpoint=False):
+def train(batch_size=256, max_episodes=10000, gamma=0.99, epsilon=1.0, decay_rate=0.9995, min_epsilon=0.05, max_episode_steps=18000, load_checkpoint=False):
     # Deep Q Learning Setup
     policy_nn = Network(env.action_space.n).to(device)
     target_nn = Network(env.action_space.n).to(device)
@@ -85,23 +85,24 @@ def train(batch_size=256, max_episodes=10000, gamma=0.9, epsilon=1.0, decay_rate
             new_obs, reward, terminated, truncated, info = env.step(action)
             total_steps += 1
             episode_steps += 1
-            # Scales reward
-            clipped_reward = np.clip(reward, -1, 1)
             done = terminated or truncated
             
             #Standing Still Penalty + Death Penalty
-            if done:
-                clipped_reward = -1.0
+            new_lives = info.get('lives', lives)
+            if new_lives < lives:
+                reward -= 50
+                lives = new_lives
             else:
-                clipped_reward += -0.01
+                reward += -0.001
+            
+            # Scales reward
+            clipped_reward = np.clip(reward, -1, 1)
             
             # add to buffer
             new_obs_array = np.array(new_obs)
             normalized_new_obs = new_obs_array.astype(np.float32) / 255.0
            
             buffer.add(normalized_obs, action, clipped_reward, normalized_new_obs, done)
-            
-            
             
             # Do Deep Q Learning at Batch Size, update every 4 steps
             if len(buffer) >= min_replay_size and total_steps % 4 == 0:
