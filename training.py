@@ -41,7 +41,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.99, epsilon=1.0, decay_rat
     target_nn = Network(env.action_space.n).to(device)
     min_replay_size = 5000
     buffer = ReplayBuffer(50000)
-    optimizer = optim.Adam(policy_nn.parameters(), lr=0.0001)
+    optimizer = optim.Adam(policy_nn.parameters(), lr=0.00025)
     mse_loss_nn = torch.nn.MSELoss()
     episodes_done = 0
     total_steps = 0
