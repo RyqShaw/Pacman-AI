@@ -87,11 +87,8 @@ def train(batch_size=256, max_episodes=10000, gamma=0.99, epsilon=1.0, decay_rat
             episode_steps += 1
             done = terminated or truncated
             
-            #Standing Still Penalty + Death Penalty
-            new_lives = info.get('lives', lives)
-            if new_lives < lives:
+            if done:
                 reward -= 50
-                lives = new_lives
             else:
                 reward += -0.001
             
@@ -173,6 +170,6 @@ def train(batch_size=256, max_episodes=10000, gamma=0.99, epsilon=1.0, decay_rat
     torch.save(policy_nn.state_dict(), "nn.path")
 
 start_time = time.time()
-train(load_checkpoint=True)
+train(load_checkpoint=False)
 end_time = time.time()
 print(f"Total Time in Training: {end_time-start_time}")
