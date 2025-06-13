@@ -90,7 +90,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.99, epsilon=1.0, decay_rat
             if done:
                 reward -= 1.0
             else:
-                reward += -0.001
+                reward -= 0.001
             
             # Scales reward
             clipped_reward = np.clip(reward, -1, 1)
