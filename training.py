@@ -92,7 +92,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.99, epsilon=1.0, decay_rat
             done = terminated or truncated
             
             if ale.lives() < current_lives:
-                reward -= 1.0
+                reward -= 10.0
                 current_lives = ale.lives()
             else:
                 reward -= 0.001
