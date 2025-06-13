@@ -4,6 +4,7 @@ import torch.optim as optim
 from torch.amp import autocast, GradScaler
 import gymnasium as gym
 import ale_py
+from ale_py import ALEInterface
 from network import Network
 from replay_buffer import ReplayBuffer
 import os
@@ -18,6 +19,8 @@ env = gym.wrappers.ResizeObservation(env, (84, 84))
 # 4 Frames as input
 env = gym.wrappers.FrameStackObservation(env, 4)
 obs, info = env.reset()
+
+ale = env.unwrapped.ale
 
 device = (
     "cuda"
@@ -39,7 +42,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.99, epsilon=1.0, decay_rat
     # Deep Q Learning Setup
     policy_nn = Network(env.action_space.n).to(device)
     target_nn = Network(env.action_space.n).to(device)
-    min_replay_size = 5000
+    min_replay_size = 10000
     buffer = ReplayBuffer(50000)
     optimizer = optim.Adam(policy_nn.parameters(), lr=0.00025)
     mse_loss_nn = torch.nn.MSELoss()
@@ -57,6 +60,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.99, epsilon=1.0, decay_rat
     
     for episode in range(episodes_done, max_episodes):
         episode_steps = 0
+        current_lives = ale.lives()
         if episode % 100 == 0:
             print(f"Episode: {episode} / {max_episodes}")
         
@@ -87,13 +91,14 @@ def train(batch_size=256, max_episodes=10000, gamma=0.99, epsilon=1.0, decay_rat
             episode_steps += 1
             done = terminated or truncated
             
-            if done:
+            if ale.lives() < current_lives:
                 reward -= 1.0
+                current_lives = ale.lives()
             else:
                 reward -= 0.001
             
             # Scales reward
-            clipped_reward = np.clip(reward, -1, 1)
+            clipped_reward = np.clip(reward, -10, 10)
             
             # add to buffer
             new_obs_array = np.array(new_obs)
@@ -119,11 +124,12 @@ def train(batch_size=256, max_episodes=10000, gamma=0.99, epsilon=1.0, decay_rat
                     
                     with torch.no_grad():
                         # Q Learning, Getting the max from the first state and making that the target_q
-                        next_q_values = target_nn(next_states).max(1)[0]
-                        target_q = rewards + gamma * next_q_values * ~dones 
+                        next_actions = policy_nn(next_states).argmax(1)
+                        next_q_vals = target_nn(next_states).gather(1, next_actions.unsqueeze(1)).squeeze()
+                        target_q_vals = rewards + (gamma * next_q_vals * ~dones)
 
                     # Loss Calculations
-                    loss = mse_loss_nn(q_vals.squeeze(), target_q)
+                    loss = mse_loss_nn(q_vals.squeeze(), target_q_vals)
                 
                 # Optimizer to update gradients
                 scaler.scale(loss).backward()
