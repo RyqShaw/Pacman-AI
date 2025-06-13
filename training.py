@@ -88,7 +88,7 @@ def train(batch_size=256, max_episodes=10000, gamma=0.99, epsilon=1.0, decay_rat
             done = terminated or truncated
             
             if done:
-                reward -= 50
+                reward -= 1.0
             else:
                 reward += -0.001
             
